@@ -88,6 +88,10 @@ func NewScoreboard(beatMap *beatmap.BeatMap, omitID int64) *ScoreBoard {
 
 						entry := NewScoreboardEntry(s.Username, s.Score.Score, int64(s.MaxCombo), i+1, false)
 
+						if settings.Gameplay.ScoreBoard.ShowAvatars {
+							entry.LoadAvatarID(s.UserID)
+						}
+
 						board.scores = append(board.scores, entry)
 						board.displayScores = append(board.displayScores, entry)
 					}
@@ -109,7 +113,26 @@ func (board *ScoreBoard) AddPlayer(name string) {
 	board.scores = append(board.scores, board.playerEntry)
 	board.displayScores = append(board.displayScores, board.playerEntry)
 
+	if settings.Gameplay.ScoreBoard.ShowAvatars {
+		board.playerEntry.LoadAvatarUser(name)
+	}
+
 	board.UpdatePlayer(0, 0)
+
+	hasAvatar := false
+
+	for _, e := range board.scores {
+		if e.IsAvatarLoaded() {
+			hasAvatar = true
+			break
+		}
+	}
+
+	if hasAvatar {
+		for _, e := range board.scores {
+			e.ShowAvatar(true)
+		}
+	}
 }
 
 func (board *ScoreBoard) UpdatePlayer(score, combo int64) {
@@ -170,7 +193,7 @@ func (board *ScoreBoard) UpdatePlayer(score, combo int64) {
 			display = true
 		}
 
-		target := vector.NewVec2d(0, start+float64(shiftI)*spacing)
+		target := vector.NewVec2d(0, start+settings.Gameplay.ScoreBoard.YOffset+float64(shiftI)*spacing*settings.Gameplay.ScoreBoard.Scale)
 
 		if board.first {
 			entry.SetPosition(target)
@@ -219,5 +242,8 @@ func (board *ScoreBoard) Draw(batch *batch.QuadBatch, alpha float64) {
 		e.Draw(board.time, batch, alpha)
 	}
 
+	scale := settings.Gameplay.ScoreBoard.Scale
+	batch.SetScale(scale, scale)
 	board.explosionManager.Draw(board.time, batch)
+	batch.SetScale(1, 1)
 }

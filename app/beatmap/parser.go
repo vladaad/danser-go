@@ -3,6 +3,7 @@ package beatmap
 import (
 	"bufio"
 	"errors"
+	"github.com/dimchansky/utfbom"
 	"github.com/wieku/danser-go/app/beatmap/objects"
 	"github.com/wieku/danser-go/app/bmath"
 	"github.com/wieku/danser-go/app/settings"
@@ -71,6 +72,7 @@ func parseDifficulty(line []string, beatMap *BeatMap) {
 	case "ApproachRate":
 		parsed, _ := strconv.ParseFloat(line[1], 64)
 		beatMap.Diff.SetAR(parsed)
+		beatMap.ARSpecified = true
 	case "CircleSize":
 		parsed, _ := strconv.ParseFloat(line[1], 64)
 		beatMap.Diff.SetCS(parsed)
@@ -202,6 +204,10 @@ func ParseBeatMap(beatMap *BeatMap) error {
 		}
 	}
 
+	if !beatMap.ARSpecified {
+		beatMap.Diff.SetAR(beatMap.Diff.GetOD())
+	}
+
 	//beatMap.LoadTimingPoints()
 
 	file.Seek(0, 0)
@@ -272,7 +278,11 @@ func ParseObjects(beatMap *BeatMap) {
 	if err != nil {
 		panic(err)
 	}
-	scanner := bufio.NewScanner(file)
+
+	fileBom := utfbom.SkipOnly(file)
+
+	scanner := bufio.NewScanner(fileBom)
+
 	buf := make([]byte, 0, 10*1024*1024)
 	scanner.Buffer(buf, cap(buf))
 	var currentSection string

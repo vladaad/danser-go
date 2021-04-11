@@ -21,7 +21,7 @@ import (
 
 var dbFile *sql.DB
 
-const databaseVersion = 20210104
+const databaseVersion = 20210326
 
 var currentPreVersion = databaseVersion
 
@@ -64,8 +64,10 @@ func Init() {
 		log.Println("Database is too old! Updating...")
 
 		if currentPreVersion < 20181111 {
-			_, err = dbFile.Exec(`ALTER TABLE beatmaps ADD COLUMN hpdrain REAL;
-							 ALTER TABLE beatmaps ADD COLUMN od REAL;`)
+			_, err = dbFile.Exec(`
+				ALTER TABLE beatmaps ADD COLUMN hpdrain REAL;
+				ALTER TABLE beatmaps ADD COLUMN od REAL;
+			`)
 
 			if err != nil {
 				panic(err)
@@ -74,17 +76,17 @@ func Init() {
 
 		if currentPreVersion < 20201027 {
 			_, err = dbFile.Exec(`
-			BEGIN TRANSACTION;
-			CREATE TEMPORARY TABLE beatmaps_backup(dir TEXT, file TEXT, lastModified INTEGER, title TEXT, titleUnicode TEXT, artist TEXT, artistUnicode TEXT, creator TEXT, version TEXT, source TEXT, tags TEXT, cs REAL, ar REAL, sliderMultiplier REAL, sliderTickRate REAL, audioFile TEXT, previewTime INTEGER, sampleSet INTEGER, stackLeniency REAL, mode INTEGER, bg TEXT, md5 TEXT, dateAdded INTEGER, playCount INTEGER, lastPlayed INTEGER, hpdrain REAL, od REAL);
-			INSERT INTO beatmaps_backup SELECT dir, file, lastModified, title, titleUnicode, artist, artistUnicode, creator, version, source, tags, cs, ar, sliderMultiplier, sliderTickRate, audioFile, previewTime, sampleSet, stackLeniency, mode, bg, md5, dateAdded, playCount, lastPlayed, hpdrain, od FROM beatmaps;
-			DROP TABLE beatmaps;
-			CREATE TABLE beatmaps(dir TEXT, file TEXT, lastModified INTEGER, title TEXT, titleUnicode TEXT, artist TEXT, artistUnicode TEXT, creator TEXT, version TEXT, source TEXT, tags TEXT, cs REAL, ar REAL, sliderMultiplier REAL, sliderTickRate REAL, audioFile TEXT, previewTime INTEGER, sampleSet INTEGER, stackLeniency REAL, mode INTEGER, bg TEXT, md5 TEXT, dateAdded INTEGER, playCount INTEGER, lastPlayed INTEGER, hpdrain REAL, od REAL);
-			INSERT INTO beatmaps SELECT * FROM beatmaps_backup;
-			DROP TABLE beatmaps_backup;
-			CREATE INDEX IF NOT EXISTS idx ON beatmaps (dir, file);
-			COMMIT;
-			vacuum;
-		`)
+				BEGIN TRANSACTION;
+				CREATE TEMPORARY TABLE beatmaps_backup(dir TEXT, file TEXT, lastModified INTEGER, title TEXT, titleUnicode TEXT, artist TEXT, artistUnicode TEXT, creator TEXT, version TEXT, source TEXT, tags TEXT, cs REAL, ar REAL, sliderMultiplier REAL, sliderTickRate REAL, audioFile TEXT, previewTime INTEGER, sampleSet INTEGER, stackLeniency REAL, mode INTEGER, bg TEXT, md5 TEXT, dateAdded INTEGER, playCount INTEGER, lastPlayed INTEGER, hpdrain REAL, od REAL);
+				INSERT INTO beatmaps_backup SELECT dir, file, lastModified, title, titleUnicode, artist, artistUnicode, creator, version, source, tags, cs, ar, sliderMultiplier, sliderTickRate, audioFile, previewTime, sampleSet, stackLeniency, mode, bg, md5, dateAdded, playCount, lastPlayed, hpdrain, od FROM beatmaps;
+				DROP TABLE beatmaps;
+				CREATE TABLE beatmaps(dir TEXT, file TEXT, lastModified INTEGER, title TEXT, titleUnicode TEXT, artist TEXT, artistUnicode TEXT, creator TEXT, version TEXT, source TEXT, tags TEXT, cs REAL, ar REAL, sliderMultiplier REAL, sliderTickRate REAL, audioFile TEXT, previewTime INTEGER, sampleSet INTEGER, stackLeniency REAL, mode INTEGER, bg TEXT, md5 TEXT, dateAdded INTEGER, playCount INTEGER, lastPlayed INTEGER, hpdrain REAL, od REAL);
+				INSERT INTO beatmaps SELECT * FROM beatmaps_backup;
+				DROP TABLE beatmaps_backup;
+				CREATE INDEX IF NOT EXISTS idx ON beatmaps (dir, file);
+				COMMIT;
+				vacuum;
+			`)
 
 			if err != nil {
 				panic(err)
@@ -100,13 +102,13 @@ func Init() {
 
 		if currentPreVersion < 20201118 {
 			_, err = dbFile.Exec(`
-			ALTER TABLE beatmaps ADD COLUMN bpmMin REAL DEFAULT 0;
- 			ALTER TABLE beatmaps ADD COLUMN bpmMax REAL DEFAULT 0;
-  			ALTER TABLE beatmaps ADD COLUMN circles INTEGER DEFAULT 0;
-   			ALTER TABLE beatmaps ADD COLUMN sliders INTEGER DEFAULT 0;
-    		ALTER TABLE beatmaps ADD COLUMN spinners INTEGER DEFAULT 0;
-     		ALTER TABLE beatmaps ADD COLUMN endTime INTEGER DEFAULT 0;
-     	`)
+				ALTER TABLE beatmaps ADD COLUMN bpmMin REAL DEFAULT 0;
+				ALTER TABLE beatmaps ADD COLUMN bpmMax REAL DEFAULT 0;
+				ALTER TABLE beatmaps ADD COLUMN circles INTEGER DEFAULT 0;
+				ALTER TABLE beatmaps ADD COLUMN sliders INTEGER DEFAULT 0;
+				ALTER TABLE beatmaps ADD COLUMN spinners INTEGER DEFAULT 0;
+				ALTER TABLE beatmaps ADD COLUMN endTime INTEGER DEFAULT 0;
+			`)
 
 			if err != nil {
 				panic(err)
@@ -318,7 +320,7 @@ func loadBeatmaps(bMaps []*beatmap.BeatMap) {
 		beatmaps[bMap.Dir+"/"+bMap.File] = i + 1
 	}
 
-	if currentPreVersion < 20210104 {
+	if currentPreVersion < 20210326 {
 		log.Println("Updating cached beatmaps")
 
 		toUpdate := make([]*beatmap.BeatMap, 0)
@@ -439,75 +441,97 @@ func loadBeatmaps(bMaps []*beatmap.BeatMap) {
 			}
 		}
 
+		if currentPreVersion < 20210326 {
+			st, err := tx.Prepare("UPDATE beatmaps SET ar = ? WHERE dir = ? AND file = ?")
+			if err != nil {
+				panic(err)
+			}
+
+			for _, bMap := range toUpdate {
+				if !bMap.ARSpecified {
+					_, err1 := st.Exec(
+						bMap.Diff.GetAR(),
+						bMap.Dir,
+						bMap.File)
+
+					if err1 != nil {
+						log.Println(err1)
+					}
+				}
+			}
+
+			if err = st.Close(); err != nil {
+				panic(err)
+			}
+		}
+
 		err = tx.Commit()
 		if err != nil {
 			panic(err)
 		}
-	} else {
-		res, _ := dbFile.Query("SELECT * FROM beatmaps")
+	}
 
-		for res.Next() {
-			beatmap := beatmap.NewBeatMap()
+	//Just scrape all loaded data above and load beatmaps from scratch with additional data
 
-			var cs float64
-			var ar float64
-			var hp float64
-			var od float64
+	res, _ := dbFile.Query("SELECT * FROM beatmaps")
 
-			res.Scan(
-				&beatmap.Dir,
-				&beatmap.File,
-				&beatmap.LastModified,
-				&beatmap.Name,
-				&beatmap.NameUnicode,
-				&beatmap.Artist,
-				&beatmap.ArtistUnicode,
-				&beatmap.Creator,
-				&beatmap.Difficulty,
-				&beatmap.Source,
-				&beatmap.Tags,
-				&cs,
-				&ar,
-				&beatmap.Timings.SliderMult,
-				&beatmap.Timings.TickRate,
-				&beatmap.Audio,
-				&beatmap.PreviewTime,
-				&beatmap.Timings.BaseSet,
-				&beatmap.StackLeniency,
-				&beatmap.Mode,
-				&beatmap.Bg,
-				&beatmap.MD5,
-				&beatmap.TimeAdded,
-				&beatmap.PlayCount,
-				&beatmap.LastPlayed,
-				&hp,
-				&od,
-				&beatmap.Stars,
-				&beatmap.MinBPM,
-				&beatmap.MaxBPM,
-				&beatmap.Circles,
-				&beatmap.Sliders,
-				&beatmap.Spinners,
-				&beatmap.Length,
-			)
+	for res.Next() {
+		beatMap := beatmap.NewBeatMap()
 
-			beatmap.Diff.SetCS(cs)
-			beatmap.Diff.SetAR(ar)
-			beatmap.Diff.SetHPDrain(hp)
-			beatmap.Diff.SetOD(od)
+		var cs, ar, hp, od float64
 
-			if beatmap.Name+beatmap.Artist+beatmap.Creator == "" {
-				log.Println("Corrupted cached beatmap found. Removing from database:", beatmap.File)
-				removeList = append(removeList, toRemove{beatmap.Dir, beatmap.File})
-				continue
-			}
+		res.Scan(
+			&beatMap.Dir,
+			&beatMap.File,
+			&beatMap.LastModified,
+			&beatMap.Name,
+			&beatMap.NameUnicode,
+			&beatMap.Artist,
+			&beatMap.ArtistUnicode,
+			&beatMap.Creator,
+			&beatMap.Difficulty,
+			&beatMap.Source,
+			&beatMap.Tags,
+			&cs,
+			&ar,
+			&beatMap.Timings.SliderMult,
+			&beatMap.Timings.TickRate,
+			&beatMap.Audio,
+			&beatMap.PreviewTime,
+			&beatMap.Timings.BaseSet,
+			&beatMap.StackLeniency,
+			&beatMap.Mode,
+			&beatMap.Bg,
+			&beatMap.MD5,
+			&beatMap.TimeAdded,
+			&beatMap.PlayCount,
+			&beatMap.LastPlayed,
+			&hp,
+			&od,
+			&beatMap.Stars,
+			&beatMap.MinBPM,
+			&beatMap.MaxBPM,
+			&beatMap.Circles,
+			&beatMap.Sliders,
+			&beatMap.Spinners,
+			&beatMap.Length,
+		)
 
-			key := beatmap.Dir + "/" + beatmap.File
+		beatMap.Diff.SetCS(cs)
+		beatMap.Diff.SetAR(ar)
+		beatMap.Diff.SetHPDrain(hp)
+		beatMap.Diff.SetOD(od)
 
-			if beatmaps[key] > 0 {
-				bMaps[beatmaps[key]-1] = beatmap
-			}
+		if beatMap.Name+beatMap.Artist+beatMap.Creator == "" {
+			log.Println("Corrupted cached beatMap found. Removing from database:", beatMap.File)
+			removeList = append(removeList, toRemove{beatMap.Dir, beatMap.File})
+			continue
+		}
 
+		key := beatMap.Dir + "/" + beatMap.File
+
+		if beatmaps[key] > 0 {
+			bMaps[beatmaps[key]-1] = beatMap
 		}
 	}
 
