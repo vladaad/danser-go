@@ -14,7 +14,6 @@ type IHitObject interface {
 
 	GetStartTime() float64
 	GetEndTime() float64
-	GetDuration() float64
 
 	GetPositionAt(float64) vector.Vector2f
 	GetStackedPositionAt(float64) vector.Vector2f
@@ -42,20 +41,6 @@ type IHitObject interface {
 	GetType() Type
 
 	DisableAudioSubmission(value bool)
-}
-
-type ILongObject interface {
-	IHitObject
-
-	GetStartAngle() float32
-
-	GetStartAngleMod(modifier difficulty.Modifier) float32
-
-	GetEndAngle() float32
-
-	GetEndAngleMod(modifier difficulty.Modifier) float32
-
-	GetPartLen() float32
 }
 
 type HitObject struct {
@@ -100,10 +85,6 @@ func (hitObject *HitObject) GetStartTime() float64 {
 
 func (hitObject *HitObject) GetEndTime() float64 {
 	return hitObject.EndTime
-}
-
-func (hitObject *HitObject) GetDuration() float64 {
-	return hitObject.EndTime - hitObject.StartTime
 }
 
 func (hitObject *HitObject) GetPositionAt(time float64) vector.Vector2f {

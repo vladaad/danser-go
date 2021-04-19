@@ -14,7 +14,7 @@ type Video struct {
 	decoder *VideoDecoder
 
 	lastTime float64
-	//Offset   float64
+	Offset   float64
 }
 
 func NewVideo(path string, depth float64, position vector.Vector2d, origin vector.Vector2d) *Video {
@@ -40,11 +40,10 @@ func NewVideo(path string, depth float64, position vector.Vector2d, origin vecto
 
 func (video *Video) Update(time float64) {
 	if video.decoder == nil || video.decoder.HasFinished() {
-		video.SetEndTime(time)
 		return
 	}
 
-	time -= video.GetStartTime()
+	time -= video.Offset
 	if time < 0 {
 		return
 	}

@@ -75,11 +75,7 @@ type ISprite interface {
 
 	GetStartTime() float64
 
-	SetStartTime(startTime float64)
-
 	GetEndTime() float64
-
-	SetEndTime(endTime float64)
 
 	GetDepth() float64
 

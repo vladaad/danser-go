@@ -42,8 +42,8 @@ func (bm *AngleOffsetMover) SetObjects(objs []objects.IHitObject) int {
 
 	distance := endPos.Dst(startPos)
 
-	s1, ok1 := end.(objects.ILongObject)
-	s2, ok2 := start.(objects.ILongObject)
+	s1, ok1 := end.(*objects.Slider)
+	s2, ok2 := start.(*objects.Slider)
 
 	var points []vector.Vector2f
 
@@ -58,7 +58,9 @@ func (bm *AngleOffsetMover) SetObjects(objs []objects.IHitObject) int {
 		if settings.Dance.Flower.LongJumpOnEqualPos {
 			scaledDistance = float32(startTime-endTime) * float32(settings.Dance.Flower.LongJumpMult)
 
-			bm.lastAngle += math.Pi
+			if math.Abs(float64(startTime-endTime)) > 1 {
+				bm.lastAngle += math.Pi
+			}
 
 			pt1 := vector.NewVec2fRad(bm.lastAngle, scaledDistance).Add(endPos)
 
@@ -70,7 +72,9 @@ func (bm *AngleOffsetMover) SetObjects(objs []objects.IHitObject) int {
 				angle := bm.lastAngle - newAngle*bm.invert
 				pt2 := vector.NewVec2fRad(angle, scaledDistance).Add(startPos)
 
-				bm.lastAngle = angle
+				if math.Abs(float64(startTime-endTime)) > 1 {
+					bm.lastAngle = angle
+				}
 
 				points = []vector.Vector2f{endPos, pt1, pt2, startPos}
 			} else {
@@ -89,31 +93,42 @@ func (bm *AngleOffsetMover) SetObjects(objs []objects.IHitObject) int {
 		points = []vector.Vector2f{endPos, pt1, pt2, startPos}
 	} else if ok1 {
 		bm.invert = -1 * bm.invert
-		bm.lastAngle = endPos.AngleRV(startPos) - newAngle*bm.invert
+		if math.Abs(float64(startTime-endTime)) > 1 {
+			bm.lastAngle = endPos.AngleRV(startPos) - newAngle*bm.invert
+		} else {
+			bm.lastAngle = s1.GetEndAngleMod(bm.mods) + math.Pi
+		}
 
 		pt1 := vector.NewVec2fRad(s1.GetEndAngleMod(bm.mods), scaledDistance).Add(endPos)
 		pt2 := vector.NewVec2fRad(bm.lastAngle, scaledDistance).Add(startPos)
 
 		points = []vector.Vector2f{endPos, pt1, pt2, startPos}
 	} else if ok2 {
-		bm.lastAngle += math.Pi
+		if math.Abs(float64(startTime-endTime)) > 1 {
+			bm.lastAngle += math.Pi
+		}
 
 		pt1 := vector.NewVec2fRad(bm.lastAngle, scaledDistance).Add(endPos)
 		pt2 := vector.NewVec2fRad(s2.GetStartAngleMod(bm.mods), scaledDistance).Add(startPos)
 
 		points = []vector.Vector2f{endPos, pt1, pt2, startPos}
 	} else {
-		if bmath.AngleBetween32(endPos, bm.lastPoint, startPos) >= float32(settings.Dance.Flower.AngleOffset)*math32.Pi/180.0 {
+		if math.Abs(float64(startTime-endTime)) > 1 && bmath.AngleBetween32(endPos, bm.lastPoint, startPos) >= float32(settings.Dance.Flower.AngleOffset)*math32.Pi/180.0 {
 			bm.invert = -1 * bm.invert
 			newAngle = float32(settings.Dance.Flower.StreamAngleOffset) * math32.Pi / 180.0
 		}
 
 		angle := endPos.AngleRV(startPos) - newAngle*bm.invert
+		if math.Abs(float64(startTime-endTime)) <= 1 {
+			angle = bm.lastAngle
+		}
 
 		pt1 := vector.NewVec2fRad(bm.lastAngle+math.Pi, scaledDistance).Add(endPos)
 		pt2 := vector.NewVec2fRad(angle, scaledDistance).Add(startPos)
 
-		bm.lastAngle = angle
+		if scaledDistance > 2 {
+			bm.lastAngle = angle
+		}
 
 		points = []vector.Vector2f{endPos, pt1, pt2, startPos}
 	}
