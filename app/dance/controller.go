@@ -78,21 +78,25 @@ func (controller *GenericController) InitCursors() {
 
 	queue := controller.bMap.GetObjectsCopy()
 
+	for i := 0; i < len(queue); i++ {
+		if s, ok := queue[i].(*objects.Slider); ok && s.IsRetarded() {
+			queue = schedulers.PreprocessQueue(i, queue, true)
+		}
+	}
+
 	if !settings.Dance.Battle && settings.Dance.TAGSliderDance && settings.TAG > 1 {
 		for i := 0; i < len(queue); i++ {
 			queue = schedulers.PreprocessQueue(i, queue, true)
 		}
 	}
 
-	if settings.Dance.SliderDance2B {
-		for i := 0; i < len(queue); i++ {
-			if s, ok := queue[i].(*objects.Slider); ok {
-				for j := i + 1; j < len(queue); j++ {
-					o := queue[j]
-					if (o.GetStartTime() >= s.GetStartTime() && o.GetStartTime() <= s.GetEndTime()) || (o.GetEndTime() >= s.GetStartTime() && o.GetEndTime() <= s.GetEndTime()) {
-						queue = schedulers.PreprocessQueue(i, queue, true)
-						break
-					}
+	for i := 0; i < len(queue); i++ {
+		if s, ok := queue[i].(*objects.Slider); ok {
+			for j := i + 1; j < len(queue); j++ {
+				o := queue[j]
+				if (o.GetStartTime() >= s.GetStartTime() && o.GetStartTime() <= s.GetEndTime()) || (o.GetEndTime() >= s.GetStartTime() && o.GetEndTime() <= s.GetEndTime()) {
+					queue = schedulers.PreprocessQueue(i, queue, true)
+					break
 				}
 			}
 		}
@@ -115,7 +119,7 @@ func (controller *GenericController) InitCursors() {
 			spinMover = settings.Dance.Spinners[i%len(settings.Dance.Spinners)]
 		}
 
-		controller.schedulers[i].Init(objs[i].objs, controller.bMap.Diff.Mods, controller.cursors[i], spinners.GetMoverByName(spinMover), true)
+		controller.schedulers[i].Init(objs[i].objs, controller.bMap.Diff.Mods, controller.cursors[i], spinners.GetMoverCtorByName(spinMover), true)
 	}
 }
 

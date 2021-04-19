@@ -14,6 +14,7 @@ type IHitObject interface {
 
 	GetStartTime() float64
 	GetEndTime() float64
+	GetDuration() float64
 
 	GetPositionAt(float64) vector.Vector2f
 	GetStackedPositionAt(float64) vector.Vector2f
@@ -31,16 +32,33 @@ type IHitObject interface {
 	SetID(int64)
 	SetComboNumber(cn int64)
 	SetComboSet(set int64)
+	SetComboSetHax(set int64)
 
 	GetStackIndex(modifier difficulty.Modifier) int64
 	SetStackIndex(index int64, modifier difficulty.Modifier)
 	SetStackOffset(offset float32, modifier difficulty.Modifier)
 
+	GetColorOffset() int64
 	IsNewCombo() bool
+	SetNewCombo(b bool)
 
 	GetType() Type
 
 	DisableAudioSubmission(value bool)
+}
+
+type ILongObject interface {
+	IHitObject
+
+	GetStartAngle() float32
+
+	GetStartAngleMod(modifier difficulty.Modifier) float32
+
+	GetEndAngle() float32
+
+	GetEndAngleMod(modifier difficulty.Modifier) float32
+
+	GetPartLen() float32
 }
 
 type HitObject struct {
@@ -65,9 +83,10 @@ type HitObject struct {
 	NewCombo    bool
 	ComboNumber int64
 	ComboSet    int64
+	ComboSetHax int64
+	ColorOffset int64
 
 	BasicHitSound audio.HitSoundInfo
-
 	audioSubmissionDisabled bool
 }
 
@@ -85,6 +104,10 @@ func (hitObject *HitObject) GetStartTime() float64 {
 
 func (hitObject *HitObject) GetEndTime() float64 {
 	return hitObject.EndTime
+}
+
+func (hitObject *HitObject) GetDuration() float64 {
+	return hitObject.EndTime - hitObject.StartTime
 }
 
 func (hitObject *HitObject) GetPositionAt(time float64) vector.Vector2f {
@@ -173,6 +196,10 @@ func (hitObject *HitObject) SetComboSet(set int64) {
 	hitObject.ComboSet = set
 }
 
+func (hitObject *HitObject) SetComboSetHax(set int64) {
+	hitObject.ComboSetHax = set
+}
+
 func (hitObject *HitObject) GetStackIndex(modifier difficulty.Modifier) int64 {
 	switch {
 	case modifier&difficulty.HardRock > 0:
@@ -206,8 +233,16 @@ func (hitObject *HitObject) SetStackOffset(offset float32, modifier difficulty.M
 	}
 }
 
+func (hitObject *HitObject) GetColorOffset() int64 {
+	return hitObject.ColorOffset
+}
+
 func (hitObject *HitObject) IsNewCombo() bool {
 	return hitObject.NewCombo
+}
+
+func (hitObject *HitObject) SetNewCombo(b bool) {
+	hitObject.NewCombo = b
 }
 
 func (hitObject *HitObject) DisableAudioSubmission(value bool) {

@@ -3,9 +3,11 @@ package beatmap
 import (
 	"bufio"
 	"errors"
+	"github.com/dimchansky/utfbom"
 	"github.com/wieku/danser-go/app/beatmap/objects"
 	"github.com/wieku/danser-go/app/bmath"
 	"github.com/wieku/danser-go/app/settings"
+	"github.com/wieku/danser-go/app/skin"
 	"math"
 	"os"
 	"path/filepath"
@@ -71,6 +73,7 @@ func parseDifficulty(line []string, beatMap *BeatMap) {
 	case "ApproachRate":
 		parsed, _ := strconv.ParseFloat(line[1], 64)
 		beatMap.Diff.SetAR(parsed)
+		beatMap.ARSpecified = true
 	case "CircleSize":
 		parsed, _ := strconv.ParseFloat(line[1], 64)
 		beatMap.Diff.SetCS(parsed)
@@ -202,6 +205,10 @@ func ParseBeatMap(beatMap *BeatMap) error {
 		}
 	}
 
+	if !beatMap.ARSpecified {
+		beatMap.Diff.SetAR(beatMap.Diff.GetOD())
+	}
+
 	//beatMap.LoadTimingPoints()
 
 	file.Seek(0, 0)
@@ -272,7 +279,11 @@ func ParseObjects(beatMap *BeatMap) {
 	if err != nil {
 		panic(err)
 	}
-	scanner := bufio.NewScanner(file)
+
+	fileBom := utfbom.SkipOnly(file)
+
+	scanner := bufio.NewScanner(fileBom)
+
 	buf := make([]byte, 0, 10*1024*1024)
 	scanner.Buffer(buf, cap(buf))
 	var currentSection string
@@ -291,11 +302,14 @@ func ParseObjects(beatMap *BeatMap) {
 		}
 
 		switch currentSection {
+		case "Colours": //nolint:misspell
+			if arr := tokenize(line, ":"); arr != nil {
+				skin.AddBeatmapColor(arr)
+			}
 		case "HitObjects":
 			if arr := tokenize(line, ","); arr != nil {
 				parseHitObjects(arr, beatMap)
 			}
-			break
 		}
 	}
 
@@ -303,18 +317,30 @@ func ParseObjects(beatMap *BeatMap) {
 		return beatMap.HitObjects[i].GetStartTime() < beatMap.HitObjects[j].GetStartTime()
 	})
 
+	skin.FinishBeatmapColors()
+
 	num := 0
 	comboNumber := 1
 	comboSet := 0
+	comboSetHax := 0
+	forceNewCombo := false
+
 	for _, iO := range beatMap.HitObjects {
-		if iO.IsNewCombo() {
+		if iO.GetType() == objects.SPINNER {
+			forceNewCombo = true
+		} else if iO.IsNewCombo() || forceNewCombo {
+			iO.SetNewCombo(true)
 			comboNumber = 1
 			comboSet++
+			comboSetHax += int(iO.GetColorOffset()) + 1
+
+			forceNewCombo = false
 		}
 
 		iO.SetID(int64(num))
 		iO.SetComboNumber(int64(comboNumber))
 		iO.SetComboSet(int64(comboSet))
+		iO.SetComboSetHax(int64(comboSetHax))
 
 		comboNumber++
 		num++

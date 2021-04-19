@@ -11,6 +11,7 @@ import (
 	"github.com/wieku/danser-go/app/audio"
 	"github.com/wieku/danser-go/app/beatmap"
 	difficulty2 "github.com/wieku/danser-go/app/beatmap/difficulty"
+	"github.com/wieku/danser-go/app/bmath"
 	camera2 "github.com/wieku/danser-go/app/bmath/camera"
 	"github.com/wieku/danser-go/app/database"
 	"github.com/wieku/danser-go/app/discord"
@@ -57,9 +58,8 @@ const (
 )
 
 var player states.State
-var pressed = false
-var pressedM = false
-var pressedP = false
+
+var scheduleScreenshot = false
 
 var batch *batch2.QuadBatch
 
@@ -72,9 +72,7 @@ var lastVSync bool
 var output string
 
 func run() {
-
 	mainthread.Call(func() {
-
 		md5 := flag.String("md5", "", "Specify the beatmap md5 hash. Overrides other beatmap search flags")
 
 		artist := flag.String("artist", "", artistDesc)
@@ -122,6 +120,14 @@ func run() {
 			output = *out
 		}
 
+		if *record && *play {
+			panic("Incompatible flags selected: -record, -play")
+		} else if *replay != "" && *play {
+			panic("Incompatible flags selected: -replay, -play")
+		} else if *replay != "" && *knockout {
+			panic("Incompatible flags selected: -replay, -knockout")
+		}
+
 		modsParsed := difficulty2.ParseMods(*mods)
 
 		if *replay != "" {
@@ -135,14 +141,14 @@ func run() {
 				panic(err)
 			}
 
+			if rp.PlayMode != 0 {
+				panic("Modes other than osu!standard are not supported")
+			}
+
 			*md5 = rp.BeatmapMD5
 			modsParsed = difficulty2.Modifier(rp.Mods)
 			*knockout = true
 			settings.REPLAY = *replay
-		}
-
-		if modsParsed.Active(difficulty2.Target) {
-			panic("Target practice mod is not supported!")
 		}
 
 		if !modsParsed.Compatible() {
@@ -239,6 +245,7 @@ func run() {
 		glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 		glfw.WindowHint(glfw.Resizable, glfw.False)
 		glfw.WindowHint(glfw.Samples, 0)
+		glfw.WindowHint(glfw.Visible, glfw.False)
 
 		var err error
 
@@ -261,8 +268,6 @@ func run() {
 		}
 
 		if settings.RECORD {
-			glfw.WindowHint(glfw.Visible, glfw.False)
-
 			//HACK: some in-app variables depend on these settings so we force them here
 			settings.Graphics.VSync = false
 			settings.Graphics.ShowFPS = false
@@ -288,6 +293,13 @@ func run() {
 
 		if err != nil {
 			panic(err)
+		}
+
+		if !*record {
+			win.SetFocusCallback(func(w *glfw.Window, focused bool) {
+				log.Println("Focus changed: ", focused)
+				input.Focused = focused
+			})
 		}
 
 		win.SetTitle("danser " + build.VERSION + " - " + beatMap.Artist + " - " + beatMap.Name + " [" + beatMap.Difficulty + "]")
@@ -356,6 +368,10 @@ func run() {
 			gl.DebugMessageControl(gl.DONT_CARE, gl.DONT_CARE, gl.DONT_CARE, 0, nil, true)
 		}
 
+		if !settings.RECORD {
+			win.Show()
+		}
+
 		gl.Enable(gl.BLEND)
 		gl.ClearColor(0, 0, 0, 1)
 		gl.Clear(gl.COLOR_BUFFER_BIT)
@@ -405,148 +421,139 @@ func run() {
 		limiter = frame.NewLimiter(int(settings.Graphics.FPSCap))
 	})
 
+	if settings.RECORD {
+		mainLoopRecord()
+	} else {
+		mainLoopNormal()
+	}
+}
+
+func mainLoopRecord() {
 	count := 0
 
-	if settings.RECORD {
-		fps := float64(settings.Recording.FPS)
+	fps := float64(settings.Recording.FPS)
 
-		if settings.Recording.MotionBlur.Enabled {
-			fps *= float64(settings.Recording.MotionBlur.OversampleMultiplier)
-		}
+	if settings.Recording.MotionBlur.Enabled {
+		fps *= float64(settings.Recording.MotionBlur.OversampleMultiplier)
+	}
 
-		w, h := int(settings.Graphics.GetWidth()), int(settings.Graphics.GetHeight())
+	w, h := int(settings.Graphics.GetWidth()), int(settings.Graphics.GetHeight())
 
-		var fbo *buffer.Framebuffer
+	var fbo *buffer.Framebuffer
 
-		mainthread.Call(func() {
-			fbo = buffer.NewFrameMultisampleScreen(w, h, false, 0)
-		})
+	mainthread.Call(func() {
+		fbo = buffer.NewFrameMultisampleScreen(w, h, false, 0)
+	})
 
-		ffmpeg.StartFFmpeg(int(fps), w, h)
+	ffmpeg.StartFFmpeg(int(fps), w, h)
 
-		updateFPS := math.Max(fps, 1000)
-		updateDelta := 1000 / updateFPS
-		fpsDelta := 1000 / fps
+	updateFPS := math.Max(fps, 1000)
+	updateDelta := 1000 / updateFPS
+	fpsDelta := 1000 / fps
 
-		deltaSumF := fpsDelta
+	deltaSumF := fpsDelta
 
-		p, _ := player.(*states.Player)
+	p, _ := player.(*states.Player)
 
-		//maxFrames := int(p.RunningTime / settings.SPEED / 1000 * fps)
+	//maxFrames := int(p.RunningTime / settings.SPEED / 1000 * fps)
 
-		var lastProgress, progress int
+	var lastProgress, progress int
 
-		for !p.Update(updateDelta) {
-			deltaSumF += updateDelta
-			if deltaSumF >= fpsDelta {
-				mainthread.Call(func() {
-					fbo.Bind()
-
-					ffmpeg.PreFrame()
-
-					viewport.Push(int(settings.Graphics.GetWidth()), int(settings.Graphics.GetHeight()))
-					pushFrame()
-					viewport.Pop()
-
-					ffmpeg.MakeFrame()
-
-					fbo.Unbind()
-
-					count++
-
-					progress = int(math.Round(p.GetTimeOffset() / p.RunningTime /*float64(count) / float64(maxFrames)*/ * 100))
-
-					if progress%5 == 0 && lastProgress != progress {
-						fmt.Println()
-						log.Println(fmt.Sprintf("Progress: %d%%", progress))
-						lastProgress = progress
-					}
-				})
-
-				mainthread.Call(func() {
-					ffmpeg.CheckData()
-				})
-
-				deltaSumF -= fpsDelta
-			}
-		}
-
-		mainthread.Call(func() {
-			ffmpeg.StopFFmpeg()
-		})
-
-		bass.SaveToFile(filepath.Join(settings.Recording.OutputDir, ffmpeg.GetFileName()+".wav"))
-
-		ffmpeg.Combine(output)
-	} else {
-		for !win.ShouldClose() {
+	for !p.Update(updateDelta) {
+		deltaSumF += updateDelta
+		if deltaSumF >= fpsDelta {
 			mainthread.Call(func() {
-				if lastVSync != settings.Graphics.VSync {
-					if settings.Graphics.VSync {
-						glfw.SwapInterval(1)
-					} else {
-						glfw.SwapInterval(0)
-					}
+				fbo.Bind()
 
-					lastVSync = settings.Graphics.VSync
-				}
+				ffmpeg.PreFrame()
 
+				viewport.Push(int(settings.Graphics.GetWidth()), int(settings.Graphics.GetHeight()))
 				pushFrame()
+				viewport.Pop()
 
-				if win.GetKey(glfw.KeyF2) == glfw.Press {
+				ffmpeg.MakeFrame()
 
-					if !pressed {
-						utils.MakeScreenshot(*win)
-					}
+				fbo.Unbind()
 
-					pressed = true
+				count++
+
+				progress = int(math.Round(p.GetTimeOffset() / p.RunningTime /*float64(count) / float64(maxFrames)*/ * 100))
+
+				if progress%5 == 0 && lastProgress != progress {
+					fmt.Println()
+					log.Println(fmt.Sprintf("Progress: %d%%", progress))
+					lastProgress = progress
 				}
-
-				if win.GetKey(glfw.KeyF2) == glfw.Release {
-					pressed = false
-				}
-
-				if win.GetKey(glfw.KeyEscape) == glfw.Press {
-					win.SetShouldClose(true)
-				}
-
-				if win.GetKey(glfw.KeyMinus) == glfw.Press {
-
-					if !pressedM {
-						if settings.DIVIDES > 1 {
-							settings.DIVIDES -= 1
-						}
-					}
-
-					pressedM = true
-				}
-
-				if win.GetKey(glfw.KeyMinus) == glfw.Release {
-					pressedM = false
-				}
-
-				if win.GetKey(glfw.KeyEqual) == glfw.Press {
-
-					if !pressedP {
-						settings.DIVIDES += 1
-					}
-
-					pressedP = true
-				}
-
-				if win.GetKey(glfw.KeyEqual) == glfw.Release {
-					pressedP = false
-				}
-
-				win.SwapBuffers()
-
-				if !settings.Graphics.VSync {
-					limiter.Sync()
-				}
-
 			})
+
+			mainthread.Call(func() {
+				ffmpeg.CheckData()
+			})
+
+			deltaSumF -= fpsDelta
 		}
 	}
+
+	mainthread.Call(func() {
+		ffmpeg.StopFFmpeg()
+	})
+
+	bass.SaveToFile(filepath.Join(settings.Recording.OutputDir, ffmpeg.GetFileName()+".wav"))
+
+	ffmpeg.Combine(output)
+}
+
+func mainLoopNormal() {
+	mainthread.Call(func() {
+		win.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+			if action == glfw.Press {
+				switch key {
+				case glfw.KeyF2:
+					scheduleScreenshot = true
+				case glfw.KeyEscape:
+					win.SetShouldClose(true)
+				case glfw.KeyMinus:
+					settings.DIVIDES = bmath.MaxI(1, settings.DIVIDES - 1)
+				case glfw.KeyEqual:
+					settings.DIVIDES += 1
+				}
+			}
+
+			input.CallListeners(w, key, scancode, action, mods)
+		})
+	})
+
+	for !win.ShouldClose() {
+		mainthread.Call(func() {
+			if lastVSync != settings.Graphics.VSync {
+				if settings.Graphics.VSync {
+					glfw.SwapInterval(1)
+				} else {
+					glfw.SwapInterval(0)
+				}
+
+				lastVSync = settings.Graphics.VSync
+			}
+
+			glfw.PollEvents()
+
+			pushFrame()
+
+			if scheduleScreenshot {
+				utils.MakeScreenshot(*win)
+				scheduleScreenshot = false
+			}
+
+			win.SwapBuffers()
+
+			if !settings.Graphics.VSync {
+				limiter.Sync()
+			}
+
+		})
+	}
+
+	settings.CloseWatcher()
 }
 
 func extensionCheck() {
@@ -578,7 +585,6 @@ func extensionCheck() {
 
 func pushFrame() {
 	statistic.Reset()
-	glfw.PollEvents()
 
 	gl.Enable(gl.SCISSOR_TEST)
 	gl.Disable(gl.DITHER)
