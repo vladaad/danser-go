@@ -46,7 +46,7 @@ func (layer *SpriteManager) Update(time float64) {
 
 	for i := 0; i < len(layer.spriteQueue); i++ {
 		c := layer.spriteQueue[i]
-		if time < c.GetStartTime() && !c.IsAlwaysVisible() {
+		if float64(time) < c.GetStartTime() && !c.IsAlwaysVisible() {
 			break
 		}
 
@@ -75,7 +75,7 @@ func (layer *SpriteManager) Update(time float64) {
 		c := layer.spriteProcessed[i]
 		c.Update(time)
 
-		if time >= c.GetEndTime() && !c.IsAlwaysVisible() {
+		if float64(time) >= c.GetEndTime() && !c.IsAlwaysVisible() {
 			copy(layer.spriteProcessed[i:], layer.spriteProcessed[i+1:])
 			layer.spriteProcessed = layer.spriteProcessed[:len(layer.spriteProcessed)-1]
 
@@ -106,7 +106,6 @@ func (layer *SpriteManager) GetNumRendered() (sum int) {
 			sum++
 		}
 	}
-
 	return
 }
 
@@ -118,17 +117,12 @@ func (layer *SpriteManager) GetNumProcessed() int {
 	return len(layer.spriteProcessed)
 }
 
-func (layer *SpriteManager) GetProcessedSprites() []ISprite {
-	return layer.spriteProcessed
-}
-
 func (layer *SpriteManager) GetLoad() (sum float64) {
 	for i := 0; i < layer.visibleObjects; i++ {
 		if layer.drawArray[i] != nil && layer.drawArray[i].GetAlpha() >= 0.01 {
 			sum += layer.drawArray[i].GetLoad()
 		}
 	}
-
 	return
 }
 

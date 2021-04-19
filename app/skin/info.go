@@ -3,7 +3,6 @@ package skin
 import (
 	"bufio"
 	"fmt"
-	"github.com/dimchansky/utfbom"
 	"github.com/wieku/danser-go/framework/assets"
 	"github.com/wieku/danser-go/framework/math/color"
 	"io"
@@ -117,12 +116,10 @@ func tokenize(line, delimiter string) []string {
 	if strings.HasPrefix(line, "//") || !strings.Contains(line, delimiter) {
 		return nil
 	}
-
 	divided := strings.Split(line, delimiter)
 	for i, a := range divided {
 		divided[i] = strings.TrimSpace(a)
 	}
-
 	return divided
 }
 
@@ -136,7 +133,7 @@ func ParseFloat(text, errType string) float64 {
 }
 
 func ParseColor(text, errType string) color.Color {
-	clr := color.NewL(1)
+	color := color.NewL(1)
 
 	divided := strings.Split(text, ",")
 	for i, a := range divided {
@@ -146,17 +143,17 @@ func ParseColor(text, errType string) color.Color {
 	for i, v := range divided {
 		switch i {
 		case 0:
-			clr.R = float32(ParseFloat(v, errType+".R")) / 255
+			color.R = float32(ParseFloat(v, errType+".R")) / 255
 		case 1:
-			clr.G = float32(ParseFloat(v, errType+".G")) / 255
+			color.G = float32(ParseFloat(v, errType+".G")) / 255
 		case 2:
-			clr.B = float32(ParseFloat(v, errType+".B")) / 255
+			color.B = float32(ParseFloat(v, errType+".B")) / 255
 		case 3:
-			clr.A = float32(ParseFloat(v, errType+".A")) / 255
+			color.A = float32(ParseFloat(v, errType+".A")) / 255
 		}
 	}
 
-	return clr
+	return color
 }
 
 func LoadInfo(path string) (*SkinInfo, error) {
@@ -175,9 +172,7 @@ func LoadInfo(path string) (*SkinInfo, error) {
 
 	defer file.Close()
 
-	fileBom := utfbom.SkipOnly(file)
-
-	scanner := bufio.NewScanner(fileBom)
+	scanner := bufio.NewScanner(file)
 
 	info := newDefaultInfo()
 

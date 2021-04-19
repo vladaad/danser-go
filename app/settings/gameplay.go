@@ -38,9 +38,9 @@ func initGameplay() *gameplay {
 				Scale:   1.0,
 				Opacity: 1.0,
 			},
-			XPosition:     5,
-			YPosition:     150,
-			Align:         "CentreLeft",
+			XPosition: 5,
+			YPosition: 150,
+			Align:     "CentreLeft",
 			ShowInResults: true,
 		},
 		KeyOverlay: &hudElement{
@@ -54,9 +54,7 @@ func initGameplay() *gameplay {
 				Scale:   1.0,
 				Opacity: 1.0,
 			},
-			HideOthers:  false,
-			ShowAvatars: false,
-			YOffset:     0,
+			HideOthers: false,
 		},
 		Mods: &mods{
 			hudElement: &hudElement{
@@ -87,7 +85,6 @@ func initGameplay() *gameplay {
 		ShowResultsScreen: true,
 		ResultsScreenTime: 5,
 		ShowWarningArrows: true,
-		FlashlightDim:     1,
 	}
 }
 
@@ -104,7 +101,6 @@ type gameplay struct {
 	ShowResultsScreen bool
 	ResultsScreenTime float64
 	ShowWarningArrows bool
-	FlashlightDim     float64
 }
 
 type boundaries struct {
@@ -148,9 +144,7 @@ type ppCounter struct {
 
 type scoreBoard struct {
 	*hudElement
-	HideOthers  bool
-	ShowAvatars bool
-	YOffset     float64
+	HideOthers bool
 }
 
 type mods struct {

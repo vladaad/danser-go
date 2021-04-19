@@ -2,7 +2,6 @@ package settings
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"log"
 	"os"
@@ -109,15 +108,13 @@ func CloseWatcher() {
 		if err != nil {
 			log.Println(err)
 		}
-
-		watcher = nil
 	}
 }
 
 func load(file *os.File, target interface{}) {
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(target); err != nil {
-		panic(fmt.Sprintf("Failed to parse %s! Please re-check the file for mistakes. Error: %s", file.Name(), err))
+		panic(err)
 	}
 }
 

@@ -327,15 +327,10 @@ func CalcSingle(objects []objects.IHitObject, difficulty *difficulty.Difficulty)
 	return newDiffCalc(objects, difficulty).Calc()
 }
 
-func CalcStep(objects []objects.IHitObject, diff *difficulty.Difficulty) []Stars {
-	modString := (diff.Mods&difficulty.DifficultyAdjustMask).String()
-	if modString == "" {
-		modString = "NM"
-	}
+func CalcStep(objects []objects.IHitObject, difficulty *difficulty.Difficulty) []Stars {
+	log.Println("Calculating step SR for mods:", difficulty.Mods.String())
 
-	log.Println("Calculating step SR for mods:", modString)
-
-	d := newDiffCalc(objects, diff)
+	d := newDiffCalc(objects, difficulty)
 	stars := make([]Stars, 0, len(objects))
 	sum := len(objects) * (len(objects) + 1) / 2
 	lastProgress := -1

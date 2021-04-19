@@ -28,9 +28,3 @@ func GetMoverByName(name string) SpinnerMover {
 		return NewCircleMover()
 	}
 }
-
-func GetMoverCtorByName(name string) func() SpinnerMover {
-	return func() SpinnerMover {
-		return GetMoverByName(name)
-	}
-}
